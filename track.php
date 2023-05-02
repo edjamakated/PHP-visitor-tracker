@@ -1,50 +1,82 @@
 <?php
 
-// Set database file path
-$db_file = 'visitors.sqlite3';
+class VisitorTracker
+{
+    private $dbFile;
+    private $pdo;
 
-// Check if database exists, and if not, create it
-if (!file_exists($db_file)) {
-    createDatabase($db_file);
+    public function __construct($dbFile = 'visitors.sqlite3')
+    {
+        $this->dbFile = $dbFile;
+
+        // Check if the database exists, and if not, create it
+        if (!file_exists($this->dbFile)) {
+            $this->createDatabase();
+        }
+
+        // Connect to the database
+        $this->connectToDatabase();
+    }
+
+    public function __destruct()
+    {
+        // Close the database connection
+        $this->pdo = null;
+    }
+
+    private function connectToDatabase()
+    {
+        try {
+            $this->pdo = new PDO('sqlite:' . $this->dbFile);
+            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        } catch (PDOException $e) {
+            die("Failed to connect to the database: " . $e->getMessage());
+        }
+    }
+
+    private function createDatabase()
+    {
+        try {
+            // Create a new SQLite3 database file
+            $this->connectToDatabase();
+
+            // Create a table for storing visitor data
+            $this->pdo->exec('CREATE TABLE visitors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_agent TEXT,
+                ip_address TEXT,
+                timestamp TEXT
+            )');
+        } catch (PDOException $e) {
+            die("Failed to create the database: " . $e->getMessage());
+        }
+    }
+
+    public function insertVisitorData($userAgent, $ipAddress, $timestamp)
+    {
+        try {
+            // Prepare the insert statement
+            $stmt = $this->pdo->prepare('INSERT INTO visitors (user_agent, ip_address, timestamp) VALUES (:user_agent, :ip_address, :timestamp)');
+            $stmt->bindParam(':user_agent', $userAgent, PDO::PARAM_STR);
+            $stmt->bindParam(':ip_address', $ipAddress, PDO::PARAM_STR);
+            $stmt->bindParam(':timestamp', $timestamp, PDO::PARAM_STR);
+
+            // Execute the insert statement
+            $stmt->execute();
+        } catch (PDOException $e) {
+            die("Failed to insert visitor data: " . $e->getMessage());
+        }
+    }
 }
 
+// Usage:
+
+$visitorTracker = new VisitorTracker();
+
 // Get user data
-$user_agent = $_SERVER['HTTP_USER_AGENT'];
-$ip_address = $_SERVER['REMOTE_ADDR'];
+$userAgent = $_SERVER['HTTP_USER_AGENT'];
+$ipAddress = $_SERVER['REMOTE_ADDR'];
 $timestamp = date('Y-m-d H:i:s');
 
 // Insert visitor data into the database
-insertVisitorData($db_file, $user_agent, $ip_address, $timestamp);
-
-function createDatabase($db_file) {
-    // Create a new SQLite3 database file
-    $db = new SQLite3($db_file);
-
-    // Create a table for storing visitor data
-    $db->exec('CREATE TABLE visitors (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_agent TEXT,
-        ip_address TEXT,
-        timestamp TEXT
-    )');
-    
-    // Close the database connection
-    $db->close();
-}
-
-function insertVisitorData($db_file, $user_agent, $ip_address, $timestamp) {
-    // Open the SQLite3 database file
-    $db = new SQLite3($db_file);
-
-    // Prepare the insert statement
-    $stmt = $db->prepare('INSERT INTO visitors (user_agent, ip_address, timestamp) VALUES (:user_agent, :ip_address, :timestamp)');
-    $stmt->bindValue(':user_agent', $user_agent, SQLITE3_TEXT);
-    $stmt->bindValue(':ip_address', $ip_address, SQLITE3_TEXT);
-    $stmt->bindValue(':timestamp', $timestamp, SQLITE3_TEXT);
-
-    // Execute the insert statement
-    $stmt->execute();
-
-    // Close the database connection
-    $db->close();
-}
+$visitorTracker->insertVisitorData($userAgent, $ipAddress, $timestamp);
